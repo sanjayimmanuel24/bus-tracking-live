@@ -10,17 +10,48 @@
  * real agency feed is a drop-in replacement — nothing in `src/` imports this file.
  *
  * DATA PROVENANCE — READ BEFORE TRUSTING THESE COORDINATES
- * Stop positions are hand-placed approximations carried over from the original
- * prototype, not surveyed locations. Route stop-sequences are plausible but
- * unverified against actual TNSTC / Coimbatore City Municipal Corporation
- * services. See README "Data provenance" for what needs real survey work.
+ * Every stop below is `provenance: 'estimated'`: hand-placed from a map, not
+ * surveyed. Route stop-sequences are plausible but unverified against actual
+ * TNSTC / Coimbatore City Municipal Corporation services.
+ *
+ * Two further gaps that are modelling errors rather than accuracy errors:
+ *
+ *   1. Stops are not paired. A real bus stop serving eastbound traffic is a
+ *      different stop from the one across the road, 20-40 m away, with its own
+ *      arrival times. These 59 entries collapse each pair into one node; a
+ *      surveyed network would be closer to 110 stops linked by parent_station.
+ *
+ *   2. No Tamil names. Non-negotiable before this is useful to most riders here.
+ *
+ * `npx tsx scripts/import-osm-stops.ts && npx tsx scripts/audit-stops.ts`
+ * reports how far each of these sits from the nearest OpenStreetMap stop, which
+ * is the list to take into the field. See README "Data provenance".
  */
+
+/**
+ * How a stop's coordinates were obtained. Recording this keeps the dataset honest
+ * as it improves: without it, a surveyed stop and a guess look identical, and
+ * nobody can tell which numbers to trust.
+ *
+ *   estimated  hand-placed from a map; accuracy unknown, assume tens of metres
+ *   osm        imported from OpenStreetMap (ODbL)
+ *   surveyed   measured in the field with averaged GNSS fixes
+ *   inferred   derived from clustered low-speed vehicle positions
+ */
+export type StopProvenance = 'estimated' | 'osm' | 'surveyed' | 'inferred';
 
 export interface StopDef {
   id: string;
   name: string;
   lat: number;
   lng: number;
+  /** Tamil name. Required before this is usable by most Coimbatore riders. */
+  nameTa?: string;
+  /**
+   * Defaults to 'estimated' -- which is what every stop below currently is.
+   * See scripts/import-osm-stops.ts and scripts/audit-stops.ts.
+   */
+  provenance?: StopProvenance;
 }
 
 export interface RouteDef {

@@ -19,9 +19,11 @@ logged at startup, never silent.
 | `npm run dev` | Builds the GTFS feed, then runs server and web client together |
 | `npm run build` | Feed, typecheck, web bundle, server check |
 | `npm run build:gtfs` | Recompiles `data/network.ts` into `packages/shared/gtfs/` |
-| `npm test` | 66 unit and integration tests (Vitest) |
+| `npm test` | 72 unit and integration tests (Vitest) |
 | `npm run typecheck` | Typechecks every workspace |
 | `npm run db:migrate` | Applies SQL migrations |
+| `npx tsx scripts/import-osm-stops.ts` | Harvests real bus stops from OpenStreetMap |
+| `npx tsx scripts/audit-stops.ts` | Reports how far each stop sits from its OSM counterpart |
 
 ---
 
@@ -220,28 +222,70 @@ as a promise the model cannot keep.
 
 ## Data provenance
 
-**These are not surveyed coordinates.** Stop positions and route stop-sequences were
-carried over from the original prototype and are plausible but unverified against
-actual TNSTC / Coimbatore City Municipal Corporation services. Before this is useful
-to a real rider, the network needs:
+**These are not surveyed coordinates.** Every stop in `data/network.ts` carries
+`provenance: 'estimated'` — hand-placed from a map, accuracy unknown, assume tens
+of metres. Route stop-sequences are plausible but unverified against actual TNSTC
+/ Coimbatore City Municipal Corporation services.
 
-- Stop locations surveyed, or sourced from OpenStreetMap / the agency
-- Route sequences checked against published timetables
-- Real headways and running times rather than derived averages
+Two of the gaps are modelling errors rather than accuracy errors, and matter more:
 
-Two known issues in the inherited data:
+1. **Stops are not paired.** A stop serving eastbound traffic is a different stop
+   from the one across the road — 20–40 m away, with its own arrival times. The 59
+   entries here collapse each pair into one node. A surveyed network of these ten
+   routes is closer to 110 stops, linked with `parent_station`.
+2. **No Tamil names.** Non-negotiable before this is useful to most riders in
+   Coimbatore.
+
+### Fixing it
+
+```bash
+npx tsx scripts/import-osm-stops.ts   # harvest OpenStreetMap via Overpass
+npx tsx scripts/audit-stops.ts        # how far is each stop from the nearest OSM node?
+```
+
+The audit sorts stops into *usable as-is* (within 25 m, inside a typical arrival
+geofence), *verify*, *likely wrong*, and *absent from OSM* — which is the list to
+take into the field, rather than surveying all 59 blind.
+
+A field survey is tractable at this size: a modern Android phone with
+**dual-frequency GNSS (L1+L5)** gets 1–3 m against 5–10 m single-frequency, and
+standing at each stop for 60–120 s and taking the **median** fix (robust to
+multipath, unlike the mean) does most of the rest. Record the Tamil name, which
+direction the stop serves, and a geotagged photo while you are there. Survey one
+route end to end and push it through the whole pipeline before doing the other
+nine — you will find modelling surprises that are cheap to fix on route 1 and
+expensive after route 10.
+
+Ride each route with continuous GPX logging too: that replaces the straight-line
+`shapes.txt` with real road geometry for Phase 3's map-matching, and the traces
+double as travel-time observations for the arrival model.
+
+Once any real vehicle is posting to `/api/ingest`, stops can also be **inferred**
+from the `vehicle_positions` table: cluster points where `speed_mps ≈ 0` for more
+than ~10 s, keep clusters that recur across runs, and take the centroid. That beats
+a single survey fix because it averages many observations of where buses actually
+halt. Traffic signals produce similar clusters, so discriminate on dwell-duration
+distribution and hit rate — a stop appears on nearly every run, a signal on about
+half.
+
+Two further notes:
+
+- OpenStreetMap is **ODbL**: share-alike on derived databases. Attribute it, and
+  push field corrections back — that is where they stay useful after this project.
+- **Do not scrape Google Maps.** It breaches their terms, and their transit data is
+  licensed from agencies, so you would be redistributing someone else's data.
+
+Two known issues in the inherited network data:
 
 - Route **52** jumps ~9 km from VGP Layout to Peelamedu Airport with no
   intermediate stop. The schedule handles it consistently (it reads as a ~25 minute
   express leg) but it is unlikely to reflect the real service.
 - `shapes.txt` is straight lines between stops, so buses cut across blocks rather
-  than following roads. Phase 3 fixes this with OSRM map-matching against an
-  OpenStreetMap extract.
+  than following roads.
 
 Three stop-name variants in the original data were merged as the same physical
 location: "Gandhipuram Bus Stand" / "Gandhipuram" → `CBE001`, and
-"Ukkadam Bus Terminus" / "Ukkadam" → `CBE007`. Shared stops are what make
-interchange and transfer search possible at all.
+"Ukkadam Bus Terminus" / "Ukkadam" → `CBE007`.
 
 ### Derived service levels
 
@@ -269,7 +313,7 @@ computed by the vehicle scheduler, not assumed:
 
 ## Testing
 
-66 tests (`npm test`), covering the spherical geometry, the CSV reader (quoted
+72 tests (`npm test`), covering the spherical geometry, the CSV reader (quoted
 fields, embedded newlines, BOM, GTFS times past 24:00), the arrival model,
 simulator invariants, the position resolver, and the HTTP API driven through
 Fastify's `inject()`.
