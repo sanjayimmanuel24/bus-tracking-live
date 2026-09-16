@@ -1,0 +1,2 @@
+feed_publisher_name,feed_publisher_url,feed_lang,feed_version
+CityBus Live (generated),https://example.invalid/citybus,en,2026-09-16

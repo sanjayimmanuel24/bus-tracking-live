@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="description" content="Live bus tracking for Coimbatore city services, built on GTFS and GTFS-Realtime.">
+<meta name="theme-color" content="#1d6ef5">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%231d6ef5'/%3E%3Cg fill='none' stroke='white' stroke-width='2.2' stroke-linecap='round'%3E%3Crect x='8' y='7' width='16' height='13' rx='2.5'/%3E%3Cpath d='M8 14h16'/%3E%3C/g%3E%3Ccircle cx='12' cy='24' r='2' fill='white'/%3E%3Ccircle cx='20' cy='24' r='2' fill='white'/%3E%3C/svg%3E">
+<title>CityBus Live — Coimbatore</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Barlow+Condensed:wght@600;700;800&family=Barlow:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+
+<a class="skip-link" href="#fleet-panel">Skip to fleet list</a>
+
+<header class="app-header">
+  <div class="brand">
+    <span class="brand__mark" aria-hidden="true">
+      <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="3" y="4" width="18" height="12" rx="2"/><path d="M3 10h18"/>
+        <circle cx="7.5" cy="19" r="1.6"/><circle cx="16.5" cy="19" r="1.6"/>
+      </svg>
+    </span>
+    <span class="brand__name">CityBus<span>Live</span></span>
+    <span class="brand__city">Coimbatore</span>
+  </div>
+
+  <p class="feed-pill" id="feed-pill" role="status">
+    <span class="feed-pill__dot" aria-hidden="true"></span>
+    <span id="feed-pill-text">Connecting…</span>
+  </p>
+
+  <div class="kpis" id="kpis" aria-label="Network status">
+    <div class="kpi"><span class="kpi__value" data-kpi="active">0</span><span class="kpi__label">In service</span></div>
+    <div class="kpi"><span class="kpi__value kpi__value--good" data-kpi="onTime">0</span><span class="kpi__label">On time</span></div>
+    <div class="kpi"><span class="kpi__value kpi__value--bad" data-kpi="late">0</span><span class="kpi__label">Late</span></div>
+    <div class="kpi"><span class="kpi__value kpi__value--accent" data-kpi="otp">—</span><span class="kpi__label" title="Share of in-service buses within ±3 minutes of schedule">On-time perf.</span></div>
+    <div class="kpi"><span class="kpi__value kpi__value--warn" data-kpi="speed">0</span><span class="kpi__label">Avg km/h</span></div>
+    <div class="clock" id="clock" aria-label="Simulated network time">--:--:--</div>
+  </div>
+</header>
+
+<main class="app-main">
+  <section class="panel" id="fleet-panel" aria-label="Routes and fleet">
+    <div class="panel__tabs" role="tablist" aria-label="Sidebar sections">
+      <button class="panel__tab is-active" role="tab" id="tab-routes" aria-controls="pane-routes" aria-selected="true">Routes</button>
+      <button class="panel__tab" role="tab" id="tab-fleet" aria-controls="pane-fleet" aria-selected="false" tabindex="-1">Fleet</button>
+    </div>
+
+    <div class="panel__pane is-active" id="pane-routes" role="tabpanel" aria-labelledby="tab-routes">
+      <div class="panel__actions">
+        <button class="text-button" id="show-all-routes" type="button">Show all</button>
+        <button class="text-button" id="hide-all-routes" type="button">Hide all</button>
+      </div>
+      <div class="route-list" id="route-list"></div>
+    </div>
+
+    <div class="panel__pane" id="pane-fleet" role="tabpanel" aria-labelledby="tab-fleet" hidden>
+      <div class="search">
+        <label class="visually-hidden" for="fleet-search">Search buses, routes or stops</label>
+        <input id="fleet-search" type="search" autocomplete="off" placeholder="Search registration, route or stop…">
+      </div>
+      <div class="fleet-list" id="fleet-list" aria-live="off"></div>
+      <p class="empty-state" id="fleet-empty" hidden>No buses match. Check the route filters or clear the search.</p>
+    </div>
+  </section>
+
+  <section class="map-area" aria-label="Live map">
+    <div id="map" role="application" aria-label="Map of buses in service"></div>
+
+    <div class="alert-stack" id="alert-stack" aria-live="polite" aria-label="Service alerts"></div>
+
+    <aside class="inspector" id="inspector" hidden aria-label="Selected bus details">
+      <header class="inspector__head">
+        <div class="inspector__identity">
+          <span class="inspector__badge" data-field="badge"></span>
+          <span class="inspector__label" data-field="label"></span>
+        </div>
+        <button class="icon-button" type="button" data-action="close" aria-label="Close bus details">
+          <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
+        </button>
+      </header>
+
+      <p class="inspector__headsign" data-field="headsign"></p>
+
+      <div class="inspector__progress">
+        <div class="progress-track" data-field="progressTrack" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-label="Journey progress">
+          <div class="progress-fill" data-field="progressFill"></div>
+          <div class="progress-thumb" data-field="progressThumb"></div>
+        </div>
+        <div class="inspector__ends">
+          <span data-field="origin"></span>
+          <span data-field="destination"></span>
+        </div>
+      </div>
+
+      <dl class="inspector__stats">
+        <div><dt>Schedule</dt><dd class="adherence" data-field="adherence"></dd></div>
+        <div><dt>Speed</dt><dd data-field="speed"></dd></div>
+        <div><dt>Occupancy</dt><dd data-field="occupancy"></dd></div>
+        <div><dt>Status</dt><dd data-field="status"></dd></div>
+      </dl>
+
+      <h3 class="inspector__section">Upcoming stops</h3>
+      <ol class="stop-board" data-field="stops"></ol>
+
+      <p class="inspector__trip">Trip <span data-field="trip"></span></p>
+    </aside>
+
+    <div class="sim-controls">
+      <label for="speed-range">Sim speed</label>
+      <input id="speed-range" type="range" min="1" max="60" step="1" value="8">
+      <output id="speed-label" for="speed-range">8×</output>
+    </div>
+  </section>
+</main>
+
+<div class="boot-screen" id="boot">
+  <div class="boot-screen__inner">
+    <div class="boot-screen__spinner" aria-hidden="true"></div>
+    <p id="boot-text">Loading GTFS feed…</p>
+  </div>
+</div>
+
+<script type="module" src="/src/main.ts"></script>
+</body>
+</html>

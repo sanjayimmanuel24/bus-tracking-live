@@ -1,0 +1,11 @@
+route_id,agency_id,route_short_name,route_long_name,route_type,route_color,route_text_color
+R1,CBE_CITY,1A,Gandhipuram – Ukkadam,3,1D6EF5,FFFFFF
+R2,CBE_CITY,9C,Singanallur – Peelamedu,3,DB2777,FFFFFF
+R3,CBE_CITY,15,Podanur – Bharathiyar University,3,16A34A,FFFFFF
+R4,CBE_CITY,21E,Saibaba Colony – Vadavalli,3,EA580C,FFFFFF
+R5,CBE_CITY,7B,Coimbatore Junction – Kuniyamuthur,3,7C3AED,FFFFFF
+R6,CBE_CITY,33,Kalapatti – R.S. Puram West,3,B45309,FFFFFF
+R7,CBE_CITY,44A,Sulur – Gandhipuram,3,0D9488,FFFFFF
+R8,CBE_CITY,18,Mettupalayam Road – Gandhipuram,3,DC2626,FFFFFF
+R9,CBE_CITY,52,Koundampalayam – Peelamedu Airport,3,9333EA,FFFFFF
+R10,CBE_CITY,6,Ukkadam – Perur,3,0284C7,FFFFFF

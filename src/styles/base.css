@@ -1,0 +1,134 @@
+/* Design tokens, reset and typography. */
+
+:root {
+  --bg:        #eef2f7;
+  --panel:     #ffffff;
+  --panel-2:   #f5f7fa;
+  --panel-3:   #eaeff6;
+  --border:    #dde3ed;
+  --border-2:  #c4cfdf;
+  --accent:    #1d6ef5;
+  --accent-bg: rgba(29, 110, 245, 0.08);
+  --good:      #15803d;
+  --good-bg:   rgba(21, 128, 61, 0.10);
+  --warn:      #b45309;
+  --warn-bg:   rgba(180, 83, 9, 0.10);
+  --bad:       #c62828;
+  --bad-bg:    rgba(198, 40, 40, 0.10);
+  --muted:     #6f849e;
+  --text:      #2d3f55;
+  --bright:    #0f1f35;
+
+  --shadow-sm: 0 1px 4px rgba(15, 31, 53, 0.08);
+  --shadow-md: 0 4px 18px rgba(15, 31, 53, 0.10);
+  --shadow-lg: 0 12px 44px rgba(15, 31, 53, 0.16);
+
+  --radius-sm: 8px;
+  --radius-md: 11px;
+  --radius-lg: 15px;
+
+  --font-sans: 'Barlow', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-cond: 'Barlow Condensed', var(--font-sans);
+  --font-mono: 'IBM Plex Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+
+  --header-h: 58px;
+  /* Bottom-sheet heights for the small-screen layout. */
+  --sheet-peek: 124px;
+  --sheet-open: 72vh;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --bg:        #0d1521;
+    --panel:     #141e2d;
+    --panel-2:   #1a2536;
+    --panel-3:   #212e42;
+    --border:    #263449;
+    --border-2:  #35465f;
+    --accent:    #4f93ff;
+    --accent-bg: rgba(79, 147, 255, 0.14);
+    --good:      #3dd07f;
+    --good-bg:   rgba(61, 208, 127, 0.14);
+    --warn:      #f0a135;
+    --warn-bg:   rgba(240, 161, 53, 0.14);
+    --bad:       #ff6b6b;
+    --bad-bg:    rgba(255, 107, 107, 0.14);
+    --muted:     #8095b0;
+    --text:      #c6d4e6;
+    --bright:    #f1f6fd;
+    --shadow-sm: 0 1px 4px rgba(0, 0, 0, 0.35);
+    --shadow-md: 0 4px 18px rgba(0, 0, 0, 0.45);
+    --shadow-lg: 0 12px 44px rgba(0, 0, 0, 0.55);
+  }
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+
+html, body { height: 100%; }
+
+body {
+  margin: 0;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--text);
+  background: var(--bg);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+
+h1, h2, h3, p, dl, dd, ol, ul, figure { margin: 0; }
+ol, ul { padding: 0; list-style: none; }
+
+button, input { font: inherit; color: inherit; }
+
+button {
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px; height: 1px;
+  padding: 0; margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.skip-link {
+  position: absolute;
+  top: -100px;
+  left: 12px;
+  z-index: 3000;
+  padding: 10px 16px;
+  background: var(--accent);
+  color: #fff;
+  border-radius: 0 0 var(--radius-sm) var(--radius-sm);
+  text-decoration: none;
+  font-weight: 600;
+  transition: top 0.15s;
+}
+.skip-link:focus { top: 0; }
+
+/* Respect a reduced-motion preference: the marker movement transitions and the
+   feed pulse are decorative, and continuous motion is exactly what triggers
+   discomfort for motion-sensitive users. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}

@@ -1,0 +1,2 @@
+agency_id,agency_name,agency_url,agency_timezone,agency_lang
+CBE_CITY,Coimbatore City Bus (demonstration feed),https://example.invalid/citybus,Asia/Kolkata,en

@@ -1,0 +1,27 @@
+{
+  "name": "citybus-live",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Live bus tracking for Coimbatore — GTFS + GTFS-Realtime shaped transit tracking console",
+  "scripts": {
+    "dev": "vite",
+    "build": "npm run build:gtfs && tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "build:gtfs": "tsx scripts/build-gtfs.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "leaflet": "^1.9.4"
+  },
+  "devDependencies": {
+    "@types/leaflet": "^1.9.12",
+    "@types/node": "^22.20.3",
+    "tsx": "^4.19.2",
+    "typescript": "^5.6.3",
+    "vite": "^5.4.10",
+    "vitest": "^2.1.4"
+  }
+}
