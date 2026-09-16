@@ -6,9 +6,9 @@
  * definition cannot silently alter what a test is asserting.
  */
 
-import { cumulativeDistances, type LatLng } from '../src/geo/geo.ts';
-import type { ShapeIndex, TransitFeed, TripIndex } from '../src/gtfs/feed.ts';
-import type { GtfsStopTime } from '../src/gtfs/types.ts';
+import { cumulativeDistances, type LatLng } from '@citybus/shared';
+import type { ShapeIndex, TransitFeed, TripIndex } from '@citybus/shared';
+import type { GtfsStopTime } from '@citybus/shared';
 
 /** Four stops in a straight north-bound line, roughly 1 km apart. */
 export const FIXTURE_STOPS: { id: string; name: string; pos: LatLng }[] = [

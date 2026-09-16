@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   bearingDegrees, cumulativeDistances, haversineMetres,
   pointAlongPath, projectOntoPath,
-} from '../src/geo/geo.ts';
+} from '@citybus/shared';
 
 describe('haversineMetres', () => {
   it('measures a known meridian arc', () => {

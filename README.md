@@ -4,77 +4,105 @@ Live bus tracking for Coimbatore city services, built on the transit industry's 
 data standards: **GTFS** for the schedule and **GTFS-Realtime** for vehicle positions
 and arrival predictions.
 
-```
+```bash
+docker compose up -d        # Postgres + PostGIS, Redis
 npm install
-npm run dev      # http://localhost:5173
+npm run dev                 # server on :3000, web client on :5173
 ```
+
+The server runs without either dependency — live state falls back to an in-process
+store and history is disabled — so `npm run dev` alone works. The degradation is
+logged at startup, never silent.
 
 | Command | What it does |
 | --- | --- |
-| `npm run dev` | Vite dev server with hot reload |
-| `npm run build` | Regenerates the GTFS feed, typechecks, builds to `dist/` |
-| `npm run build:gtfs` | Recompiles `data/network.ts` into `public/gtfs/*.txt` |
-| `npm test` | Unit tests (Vitest) |
-| `npm run typecheck` | `tsc --noEmit` |
+| `npm run dev` | Builds the GTFS feed, then runs server and web client together |
+| `npm run build` | Feed, typecheck, web bundle, server check |
+| `npm run build:gtfs` | Recompiles `data/network.ts` into `packages/shared/gtfs/` |
+| `npm test` | 66 unit and integration tests (Vitest) |
+| `npm run typecheck` | Typechecks every workspace |
+| `npm run db:migrate` | Applies SQL migrations |
 
 ---
 
 ## Architecture
 
-The organising idea is that **the frontend is a dumb consumer of a standard feed**.
-It has no privileged access to the simulator and no idea the buses are not real.
-
 ```
-   data/network.ts                     (authoring format — human editable)
-          │  npm run build:gtfs
-          ▼
-   public/gtfs/*.txt                   GTFS static: stops, routes, trips,
-          │                            stop_times, shapes, calendar
-          ▼
-   src/gtfs/feed.ts ──────────┐
-                              ▼
-                        src/state/store.ts  ◄──── GTFS-Realtime FeedSource
-                              │                   (src/realtime/)
-                              ▼                          ▲
-                        src/ui/*.ts                      │
-                                                 SimulatedFeedSource
-                                                 (Phase 1 — in browser)
+  driver phone ─┐
+                ├── POST /api/ingest ──►  server  ──► Redis      (live state)
+  simulator ────┘   (bearer token)          │       ──► Postgres  (history, PostGIS)
+                                            │
+                                     WebSocket /ws
+                                    (viewport-scoped)
+                                            │
+                                            ▼
+                             GTFS static ──► web client
+                              /api/gtfs
 ```
 
-`FeedSource` (`src/realtime/types.ts`) is the seam. Phase 1 ships
-`SimulatedFeedSource`, which generates `VehiclePosition`, `TripUpdate` and
-`ServiceAlert` entities from the static schedule. Phase 2 replaces it with a
-WebSocket client against a real ingest backend. **Nothing in `src/ui/` or
-`src/state/` changes** when that happens — only the two lines in `src/main.ts`
-that construct the source.
+A **vehicle reports only what it can observe**: a GPS fix, a heading, a speed, and
+the trip it is working. The server derives everything else from the timetable —
+distance along the route, schedule adherence, arrival predictions — by projecting
+the reported point onto the trip shape.
 
-### Why GTFS
+That split is the point of Phase 2. The built-in simulator is a *client* of the
+server with no privileged access: it authenticates with the same bearer token a
+driver's phone would and posts to the same endpoint. Replacing it with real
+vehicles is a deployment change, not a rewrite.
 
-Adopting the standard up front is what makes the rest of the roadmap possible:
-
-- A real agency feed can be dropped in by pointing `loadFeed()` at a different URL.
-- A real vehicle — a driver's phone posting positions — produces the same entities.
-- Trip planning, departure boards and transfer search all assume this data model.
-- The prediction output is directly comparable with what agencies publish.
-
-### Module map
+### Workspace layout
 
 | Path | Responsibility |
 | --- | --- |
 | `data/network.ts` | Source network: stops, route stop-sequences, headways |
-| `scripts/build-gtfs.ts` | Compiles the network into a GTFS feed, including vehicle scheduling |
-| `src/geo/geo.ts` | Haversine distance, bearings, interpolation and projection onto a path |
-| `src/gtfs/` | CSV reader and feed loader with lookup indexes |
-| `src/realtime/types.ts` | GTFS-Realtime entity shapes and the `FeedSource` interface |
-| `src/realtime/sim/` | The vehicle simulator |
-| `src/eta/predict.ts` | **The arrival model.** Isolated so it can be replaced wholesale |
-| `src/eta/present.ts` | Turning predictions into rider-readable text |
-| `src/state/store.ts` | Joins static + realtime into view models; computes KPIs |
-| `src/ui/` | Rendering. Diff-based, never rebuild-everything |
+| `scripts/build-gtfs.ts` | Compiles the network into GTFS, including vehicle scheduling |
+| `packages/shared/` | Domain code used by both sides: geometry, GTFS parsing, GTFS-RT types, the arrival model, the simulator |
+| `apps/server/` | Ingest API, realtime fanout, history store |
+| `apps/web/` | Browser client |
+
+The shared package is what lets the server run the *same* arrival model and GTFS
+parser the client uses, rather than a second implementation that drifts.
+
+### API
+
+| Endpoint | Purpose |
+| --- | --- |
+| `POST /api/ingest` | Vehicle position reports (bearer token) |
+| `POST /api/vehicles/register` | Vehicle registry upsert |
+| `WS /ws` | Realtime fanout; clients subscribe with a bbox and route filter |
+| `GET /api/realtime` | Current GTFS-Realtime feed message as JSON |
+| `GET /api/vehicles` | Live vehicles, optionally filtered by route |
+| `GET /api/stops/:id/departures` | Departure board across every route serving a stop |
+| `GET /api/stops/near` | Stops within a radius (PostGIS) |
+| `GET /api/analytics/on-time` | Observed on-time performance by route |
+| `GET /api/vehicles/:id/track` | Historical track for replay |
+| `GET /api/gtfs/:file` | The static feed, with ETags |
+| `GET /health`, `GET /ready` | Liveness; dependency status |
+
+### Viewport-scoped subscriptions
+
+A client tells the server which map area and routes it is showing, and receives
+only matching vehicles. Measured on the current network: a city-wide subscription
+is **55.9 KB** per snapshot, a single-neighbourhood viewport **13.5 KB** — a 76%
+reduction. At 48 buses that is an optimisation; at city scale it is the difference
+between a usable phone client and one streaming the whole fleet to show six streets.
+
+### Storage
+
+**Redis** holds current vehicle state, keyed with a TTL — a bus that stops
+reporting disappears on its own rather than lingering as a ghost on the map, with
+no sweeper process. **Postgres with PostGIS** stores position history as a
+`geography(Point,4326)` column, so `ST_DWithin` takes and returns metres with no
+projection step. Writes are batched: 48 buses at 2 Hz is ~8.3 million rows a day.
+
+`stop_arrivals` records the actual time each bus reached each stop against the
+scheduled time. That is the ground truth the Phase 3 model will be trained and
+scored on — without it there are predictions and no way to know whether they were
+any good.
 
 ---
 
-## What Phase 1 changed, and why
+## What Phase 1 fixed in the original prototype
 
 The starting point was a single 900-line HTML file. It looked good and was a
 genuinely useful prototype, but every number on screen came from `Math.random()`.
@@ -137,6 +165,35 @@ values go through `textContent`.
 
 Also added: keyboard navigation and ARIA labelling throughout, a dark theme, a
 `prefers-reduced-motion` path, and pausing the feed when the tab is hidden.
+
+---
+
+## What Phase 2 changed
+
+**Computation moved off the client.** In Phase 1 the browser ran a simulator that
+computed its own delays and predictions, because it was the only thing that
+existed. Now a vehicle reports a raw GPS fix and the server derives the rest. That
+exposed a problem the simulator had hidden: it tracked layover internally, but the
+server sees only a bus parked at a trip origin, and the naive calculation reported
+a bus waiting 20 minutes for its departure as *20 minutes early*. Network-wide
+adherence sat at −146 seconds. The server now recovers that state from the
+timetable, and `tests/resolver.test.ts` guards it.
+
+**The simulator became an ingest client.** It runs in the server process but talks
+to it over HTTP with a bearer token, exactly as a driver's phone would. It also
+injects Gaussian GPS error (8 m by default) — a simulator that reports exact
+positions is one that lets server-side bugs hide. Measured against history, the
+mean reported offset from the route shape is 7.0 m, which is the noise being
+correctly absorbed by projection rather than mistaken for a detour.
+
+**The client kept its interface.** `WebSocketFeedSource` satisfies the same
+`FeedSource` contract the Phase 1 simulator did, so `src/state/` and `src/ui/` were
+untouched. The client gained reconnection with backoff and a staleness watchdog: an
+open socket is not the same as a live feed, and a map full of frozen buses is worse
+than an honest "Reconnecting…".
+
+**The simulation speed control was removed.** It had no meaning once the simulator
+moved server-side, and a control that does nothing is worse than no control.
 
 ---
 
@@ -212,47 +269,57 @@ computed by the vehicle scheduler, not assumed:
 
 ## Testing
 
-42 unit tests (`npm test`) covering the spherical geometry, the CSV reader
-(quoted fields, embedded newlines, BOM, GTFS times past 24:00), the arrival model,
-and simulator invariants.
+66 tests (`npm test`), covering the spherical geometry, the CSV reader (quoted
+fields, embedded newlines, BOM, GTFS times past 24:00), the arrival model,
+simulator invariants, the position resolver, and the HTTP API driven through
+Fastify's `inject()`.
 
-The most important one asserts that **reported speed matches observed
-displacement** — a direct regression test for the prototype's core inconsistency.
-Others cover block progression without teleporting, warm-starting each block at the
-correct trip for the current clock, and reproducibility from a fixed seed.
+Two exist specifically as regression guards for bugs that were really there:
 
-Not yet covered: any browser-level end-to-end tests. Phase 1 was verified manually
-against a headless Chromium (render, scroll retention, DOM reuse, route filtering,
-mobile layout, zero console errors); making that a committed Playwright suite is
-Phase 5 work.
+- **Reported speed matches observed displacement.** The original prototype moved
+  markers at ~117 km/h in wall-clock time while displaying an unrelated random walk
+  of 8–55 km/h.
+- **A bus that has not departed is never reported as early.** The Phase 2 ingest
+  path lost the layover state the Phase 1 simulator tracked internally.
+
+The API tests run with neither Postgres nor Redis configured, which also exercises
+the in-memory fallbacks — the configuration a contributor gets from a bare
+`npm run dev`.
+
+Not yet covered in CI: browser-level end-to-end tests. The full stack was verified
+manually against headless Chromium (WebSocket delivery, live rendering, scroll
+retention, DOM reuse, mobile layout, zero console errors) and the WebSocket
+protocol against a scripted client (viewport filtering, route filtering, malformed
+input handling). Committing those as a suite is Phase 5 work.
 
 ---
 
 ## Roadmap
 
-**Phase 1 — real app structure.** ✅ *This release.*
+**Phase 1 — real app structure.** ✅
 Vite + TypeScript, GTFS static feed, GTFS-Realtime boundary, corrected physics,
 arrival predictions, diff-based rendering, responsive layout.
 
-**Phase 2 — real backend.**
-Fastify or FastAPI ingest API, Postgres + PostGIS, Redis for live state, WebSocket
-fanout with viewport-scoped subscriptions. The simulator moves server-side and posts
-to the same `/ingest` endpoint a real vehicle would.
+**Phase 2 — real backend.** ✅ *This release.*
+Fastify ingest API with token auth, Postgres + PostGIS history, Redis live state,
+WebSocket fanout with viewport-scoped subscriptions, departure boards, on-time
+analytics, Docker Compose. The simulator moved server-side and became an ordinary
+ingest client.
 
 **Phase 3 — the parts that make it serious.**
-Learned ETA model with published accuracy (MAE against held-out actuals) · OSRM
-map-matching so buses follow roads · Kalman filtering of GPS noise, stale-fix
-detection, dead reckoning through signal loss · bus bunching and headway regularity
-detection.
+Learned ETA model, trained on the `stop_arrivals` ground truth Phase 2 now records,
+with published accuracy (MAE against held-out actuals) · OSRM map-matching so buses
+follow roads instead of straight lines between stops · Kalman filtering of GPS
+noise, stale-fix detection, dead reckoning through signal loss · bus bunching and
+headway regularity detection.
 
 **Phase 4 — rider features.**
 "Notify me when 5 minutes away" via Web Push · trip planner (RAPTOR over the GTFS) ·
 crowding from driver input · offline PWA · Tamil/English localisation.
 
 **Phase 5 — credibility.**
-A driver PWA on a real phone in a real vehicle · historical replay · ops dashboard
-(on-time performance, dwell distributions, ridership heatmaps) · load testing ·
-Docker Compose, CI, Playwright end-to-end tests.
+A driver PWA on a real phone in a real vehicle · historical replay over the track
+API · ops dashboard · load testing · CI and Playwright end-to-end tests.
 
 ---
 

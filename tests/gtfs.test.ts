@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { formatGtfsTime, parseCsv, parseGtfsTime, toCsv } from '../src/gtfs/csv.ts';
+import { formatGtfsTime, parseCsv, parseGtfsTime, toCsv } from '@citybus/shared';
 
 describe('parseCsv', () => {
   it('reads a simple header-keyed table', () => {

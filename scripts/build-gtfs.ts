@@ -1,5 +1,5 @@
 /**
- * Compiles `data/network.ts` into a GTFS static feed under `public/gtfs/`.
+ * Compiles `data/network.ts` into a GTFS static feed under `packages/shared/gtfs/`.
  *
  * What this script derives, rather than hard-codes:
  *   - shapes.txt          route geometry + cumulative distance, in metres
@@ -21,10 +21,14 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { ROUTES, SERVICE, STOPS, type RouteDef } from '../data/network.ts';
-import { cumulativeDistances, haversineMetres, type LatLng } from '../src/geo/geo.ts';
-import { formatGtfsTime, toCsv } from '../src/gtfs/csv.ts';
+import { cumulativeDistances, haversineMetres, type LatLng } from '../packages/shared/src/geo/geo.ts';
+import { formatGtfsTime, toCsv } from '../packages/shared/src/gtfs/csv.ts';
 
-const OUT_DIR = resolve(dirname(fileURLToPath(import.meta.url)), '..', 'public', 'gtfs');
+/**
+ * The feed lives in the shared package because the server publishes it and the
+ * client consumes it; neither owns it.
+ */
+const OUT_DIR = resolve(dirname(fileURLToPath(import.meta.url)), '..', 'packages', 'shared', 'gtfs');
 
 const AGENCY_ID = 'CBE_CITY';
 const SERVICE_ID = 'DAILY';

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import { haversineMetres } from '../src/geo/geo.ts';
-import { SimulatedFeedSource } from '../src/realtime/sim/simulator.ts';
+import { haversineMetres } from '@citybus/shared';
+import { SimulatedFeedSource } from '@citybus/shared';
 import { FIXTURE_STOPS, makeFeed, makeShape, makeTrip } from './fixtures.ts';
 
 const PATH = FIXTURE_STOPS.map((s) => s.pos);

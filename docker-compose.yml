@@ -1,0 +1,68 @@
+# Local infrastructure for CityBus Live.
+#
+#   docker compose up -d
+#   npm install && npm run dev
+#
+# Brings up Postgres with PostGIS and Redis. The application itself runs on the
+# host during development so hot reload works; `docker compose --profile app up`
+# additionally runs the server in a container, closer to how it deploys.
+
+services:
+  postgres:
+    # postgis/postgis bundles the extension; plain postgres images do not.
+    image: postgis/postgis:16-3.4
+    environment:
+      POSTGRES_USER: citybus
+      POSTGRES_PASSWORD: citybus
+      POSTGRES_DB: citybus
+    ports:
+      - '5432:5432'
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U citybus -d citybus']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    # Live state is rebuilt from incoming reports within seconds, so persistence
+    # buys nothing and costs disk I/O on every write.
+    command: redis-server --save '' --appendonly no --maxmemory 256mb --maxmemory-policy allkeys-lru
+    ports:
+      - '6379:6379'
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  server:
+    profiles: ['app']
+    build:
+      context: .
+      dockerfile: apps/server/Dockerfile
+    environment:
+      NODE_ENV: production
+      PORT: '3000'
+      DATABASE_URL: postgresql://citybus:citybus@postgres:5432/citybus
+      REDIS_URL: redis://redis:6379
+      # Override this in any real deployment. The server itself refuses to boot
+      # with this value when NODE_ENV=production, so the guard lives in the
+      # application rather than here -- Compose interpolates every service
+      # regardless of profile, and a hard requirement would block
+      # `docker compose up -d postgres redis` for someone who only wants the
+      # databases.
+      INGEST_TOKEN: ${INGEST_TOKEN:-dev-ingest-token}
+      SIMULATOR_ENABLED: 'true'
+    ports:
+      - '3000:3000'
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+volumes:
+  postgres-data:

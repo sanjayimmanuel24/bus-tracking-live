@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import { DELAY_DECAY_PER_STOP, predictRemainingStops } from '../src/eta/predict.ts';
-import { adherenceFor, describeDelay, presentEta } from '../src/eta/present.ts';
+import { DELAY_DECAY_PER_STOP, predictRemainingStops } from '@citybus/shared';
+import { adherenceFor, describeDelay, presentEta } from '@citybus/shared';
 import { FIXTURE_STOPS, makeShape, makeTrip } from './fixtures.ts';
 
 const shape = makeShape('SH1', FIXTURE_STOPS.map((s) => s.pos));

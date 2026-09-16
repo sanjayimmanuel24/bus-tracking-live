@@ -1,0 +1,14 @@
+{
+  "name": "@citybus/shared",
+  "version": "0.2.0",
+  "private": true,
+  "type": "module",
+  "description": "Domain code shared by the web client and the server: geometry, GTFS, GTFS-Realtime types, arrival prediction and the vehicle simulator.",
+  "exports": {
+    ".": "./src/index.ts",
+    "./*": "./src/*"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  }
+}
